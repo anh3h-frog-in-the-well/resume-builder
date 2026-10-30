@@ -1,0 +1,78 @@
+export type Experience = {
+  company: string;
+  role: string;
+  from: string;
+  to: string;
+  description: string;
+};
+
+export type Education = {
+  school: string;
+  degree: string;
+  dates: string;
+};
+
+export type ResumeTemplate = "modern" | "classic" | "creative";
+
+export type Resume = {
+  name: string;
+  role: string;
+  email: string;
+  phone: string;
+  location: string;
+  website: string;
+  summary: string;
+  experience: Experience[];
+  education: Education[];
+  skills: string;
+  photo: string;
+  template: ResumeTemplate;
+};
+
+export type ResumeBase = Record<string, unknown> & {
+  name: string;
+  role: string;
+  email: string;
+  phone: string;
+  location: string;
+  website: string;
+  summary: string;
+  experience: Experience[];
+  education: Education[];
+  skills: string;
+};
+
+export type ResumeSection= "personal" | "skills" | "experience" | "education";
+
+export type TemplateDetails = Record<
+  ResumeTemplate,
+  { name: string; description: string }
+>;
+
+export type IconProps = {
+  name: string;
+  size?: number;
+};
+
+export type FieldProps = {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  type?: string;
+  multiline?: boolean;
+  disabled?: boolean;
+  hint?: string;
+};
+
+export type ExperienceField =
+  | "company"
+  | "role"
+  | "from"
+  | "to"
+  | "description";
+
+export type ResumeUpdater = <K extends keyof Resume>(
+  key: K,
+  value: Resume[K],
+) => void;
