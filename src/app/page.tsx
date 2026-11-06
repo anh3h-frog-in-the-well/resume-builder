@@ -1,56 +1,75 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Icon from "../client/Icon";
 import AuthControl from "../client/AuthControl";
 import EducationSection from "../client/EducationSection";
 import ExperienceSection from "../client/ExperienceSection";
 import PersonalInfoSection from "../client/PersonalInfoSection";
 import ResumeHeader from "../client/ResumeHeader";
+import ResumeSwitcher from "../client/ResumeSwitcher";
 import SkillsSection from "../client/SkillsSection";
 import type {
   ResumeSection,
   ResumeUpdater,
+  ResumeVersionSummary,
   TemplateDetails,
   Resume,
 } from "../interface/resume";
 import {
-  normalizeResume,
+  createBlankResume,
+  createCopyTitle,
+  normalizeResumeVersion,
+  normalizeResumeVersionList,
+  normalizeResumeVersionSummary,
   resumeTemplates,
 } from "../util/resume-helper";
 import { formatExperienceDates, handleJsonImport } from "../util/helper";
 
-const initialResume: Resume = {
-  name: "Max Mustermann",
-  role: "Product Owner",
-  email: "max.mustermann@test.com",
-  phone: "+49 123 456 789",
-  location: "Bonn, NRW",
-  website: "musterman.test",
-  summary:
-    "Product designer with 6+ years of experience turning complex problems into clear, thoughtful digital experiences. I bring a user-first mindset, a love for collaboration, and a sharp eye for the details that make products feel effortless.",
-  experience: [
-    {
-      company: "ABC",
-      role: "Senior Product Designer",
-      from: "2021-01",
-      to: "",
-      description:
-        "Led end-to-end design for collaboration features used by 2M+ teams. Partnered with product and engineering to launch a new workflow that increased activation by 28%.",
-    }
-  ],
-  education: [
-    {
-      school: "ABC school",
-      degree: "Bachelor",
-      dates: "2000 — 2004",
-    },
-  ],
-  skills:
-    "Product strategy, UX research, UI design, Prototyping, Design systems, Figma, Accessibility, Interaction design",
-  photo: "",
-  template: "modern",
+/** The version open in the editor, plus a counter of local edits. */
+type ActiveDraft = {
+  id: string;
+  title: string;
+  resume: Resume;
+  /** Incremented on every local edit; 0 right after loading from the server. */
+  revision: number;
 };
+
+const activeResumeStorageKey = "draftly-active-resume";
+const backupStorageKey = "draftly-resume";
+
+async function readErrorMessage(response: Response, fallback: string) {
+  try {
+    const payload: unknown = await response.json();
+    if (
+      typeof payload === "object" &&
+      payload !== null &&
+      "error" in payload &&
+      typeof payload.error === "string"
+    ) {
+      return payload.error;
+    }
+  } catch {
+    // Fall through to the generic message.
+  }
+  return fallback;
+}
+
+function readStoredActiveId() {
+  try {
+    return window.localStorage.getItem(activeResumeStorageKey);
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredActiveId(id: string) {
+  try {
+    window.localStorage.setItem(activeResumeStorageKey, id);
+  } catch (error) {
+    console.error("Unable to remember the active resume.", error);
+  }
+}
 
 const templateDetails: TemplateDetails = {
   modern: { name: "Modern", description: "Clean & confident" },
@@ -66,82 +85,240 @@ const sections = [
 ] as const;
 
 export default function Home() {
-  const [resume, setResume] = useState<Resume>(initialResume);
+  const [versions, setVersions] = useState<ResumeVersionSummary[]>([]);
+  const [active, setActive] = useState<ActiveDraft | null>(null);
+  const [isVersionBusy, setIsVersionBusy] = useState(false);
   const [activeSection, setActiveSection] = useState<ResumeSection>("personal");
-  const [isReady, setIsReady] = useState(false);
   const [saveLabel, setSaveLabel] = useState("Connecting to server...");
-  const [importError, setImportError] = useState("");
-  const [importStatus, setImportStatus] = useState("");
+  const [noticeError, setNoticeError] = useState("");
+  const [noticeStatus, setNoticeStatus] = useState("");
   const [isImportingJson, setIsImportingJson] = useState(false);
+  /** The newest revision of each version that reached the server. */
+  const savedRevisions = useRef<Record<string, number>>({});
+
+  const showError = (message: string) => {
+    setNoticeStatus("");
+    setNoticeError(message);
+  };
+
+  const loadVersion = useCallback(async (id: string) => {
+    const response = await fetch(`/api/resumes/${id}`);
+    if (!response.ok) {
+      throw new Error(
+        await readErrorMessage(response, `Database returned HTTP ${response.status}.`),
+      );
+    }
+    const version = normalizeResumeVersion(await response.json());
+    if (!version) {
+      throw new Error("The server returned an invalid resume format.");
+    }
+    savedRevisions.current[version.id] = 0;
+    setActive({ id: version.id, title: version.title, resume: version.resume, revision: 0 });
+    writeStoredActiveId(version.id);
+    return version;
+  }, []);
 
   useEffect(() => {
-    const getDraftResume = async () => {
+    const bootstrap = async () => {
       try {
-        const response = await fetch("/api/resume");
-        if (response.status === 404) {
-          setSaveLabel("New draft");
-          setIsReady(true);
-          return;
-        }
-
+        const response = await fetch("/api/resumes");
         if (!response.ok) {
           throw new Error(`Database returned HTTP ${response.status}.`);
         }
-
-        const parsed = normalizeResume(await response.json());
-        if (!parsed) {
-          throw new Error("The server returned an invalid resume format.");
+        const payload: unknown = await response.json();
+        const list = normalizeResumeVersionList(payload);
+        if (!list || list.length === 0) {
+          throw new Error("The server returned an invalid resume list.");
         }
+        const isNew =
+          typeof payload === "object" &&
+          payload !== null &&
+          "isNew" in payload &&
+          payload.isNew === true;
 
-        setResume(parsed);
-        setSaveLabel("Restored from server");
-        setIsReady(true);
+        const preferredId = readStoredActiveId();
+        const initial = list.find((version) => version.id === preferredId) ?? list[0];
+        await loadVersion(initial.id);
+        setVersions(list);
+        setSaveLabel(isNew ? "New draft" : "Restored from server");
       } catch (error) {
-        console.error("Unable to restore your resume from the server.", error);
+        console.error("Unable to restore your resumes from the server.", error);
         setSaveLabel("Server load failed");
       }
     };
 
-    void getDraftResume();
+    void bootstrap();
+  }, [loadVersion]);
+
+  /** Sends a draft to the server unless that revision was already saved. */
+  const saveDraft = useCallback(async (draft: ActiveDraft) => {
+    if ((savedRevisions.current[draft.id] ?? 0) >= draft.revision) return true;
+
+    const serializedResume = JSON.stringify(draft.resume);
+    try {
+      window.localStorage.setItem(backupStorageKey, serializedResume);
+    } catch (error) {
+      console.error("Unable to save the browser backup.", error);
+    }
+
+    try {
+      const response = await fetch(`/api/resumes/${draft.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: serializedResume,
+      });
+      if (!response.ok) {
+        throw new Error(`Database returned HTTP ${response.status}.`);
+      }
+      savedRevisions.current[draft.id] = Math.max(
+        savedRevisions.current[draft.id] ?? 0,
+        draft.revision,
+      );
+      setSaveLabel("Saved");
+      setVersions((current) =>
+        current.map((version) =>
+          version.id === draft.id
+            ? { ...version, updatedAt: new Date().toISOString() }
+            : version,
+        ),
+      );
+      return true;
+    } catch (error) {
+      console.error("Unable to save your resume to Server.", error);
+      setSaveLabel("Server save failed");
+      return false;
+    }
   }, []);
 
   useEffect(() => {
-    if (!isReady) return;
-
-    const saveDraft = async () => {
-      const serializedResume = JSON.stringify(resume);
-      try {
-        window.localStorage.setItem("draftly-resume", serializedResume);
-      } catch (error) {
-        console.error("Unable to save the browser backup.", error);
-      }
-
-      try {
-        const response = await fetch("/api/resume", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: serializedResume,
-        });
-        if (!response.ok) {
-          throw new Error(`Database returned HTTP ${response.status}.`);
-        }
-        setSaveLabel("Saved");
-      } catch (error) {
-        console.error("Unable to save your resume to Server.", error);
-        setSaveLabel("Server save failed");
-      }
-    };
+    if (!active || active.revision === 0) return;
 
     const timeoutId = window.setTimeout(() => {
-      void saveDraft();
+      void saveDraft(active);
     }, 500);
     return () => window.clearTimeout(timeoutId);
-  }, [isReady, resume]);
+  }, [active, saveDraft]);
+
+  /** Applies a local change to the open version and schedules an autosave. */
+  const applyResume = (change: (current: Resume) => Resume) => {
+    setSaveLabel("Unsaved changes");
+    setActive((current) =>
+      current
+        ? { ...current, resume: change(current.resume), revision: current.revision + 1 }
+        : current,
+    );
+  };
 
   const update: ResumeUpdater = (key, value) => {
-    setSaveLabel("Unsaved changes");
-    setResume((current) => ({ ...current, [key]: value }));
+    applyResume((current) => ({ ...current, [key]: value }));
   };
+
+  /** Runs a version operation with the busy flag and pending edits flushed. */
+  const runVersionAction = async (
+    label: string,
+    action: () => Promise<void>,
+  ) => {
+    if (isVersionBusy) return;
+    setIsVersionBusy(true);
+    setNoticeError("");
+    try {
+      if (active && !(await saveDraft(active))) {
+        throw new Error("Your latest changes could not be saved. Please try again.");
+      }
+      await action();
+    } catch (error) {
+      console.error(`Unable to ${label}.`, error);
+      showError(error instanceof Error ? error.message : `Unable to ${label}.`);
+    } finally {
+      setIsVersionBusy(false);
+    }
+  };
+
+  const openVersion = (id: string) =>
+    runVersionAction("open the resume", async () => {
+      setSaveLabel("Loading resume...");
+      try {
+        await loadVersion(id);
+        setSaveLabel("Restored from server");
+      } catch (error) {
+        setSaveLabel("Server load failed");
+        throw error;
+      }
+    });
+
+  const createVersion = (title: string, resume: Resume) =>
+    runVersionAction("create the resume", async () => {
+      const response = await fetch("/api/resumes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, resume }),
+      });
+      if (!response.ok) {
+        throw new Error(
+          await readErrorMessage(response, "Unable to create the resume."),
+        );
+      }
+      const created = normalizeResumeVersionSummary(await response.json());
+      if (!created) {
+        throw new Error("The server returned an invalid resume format.");
+      }
+      setVersions((current) => [...current, created]);
+      savedRevisions.current[created.id] = 0;
+      setActive({ id: created.id, title: created.title, resume, revision: 0 });
+      writeStoredActiveId(created.id);
+      setActiveSection("personal");
+      setSaveLabel("Saved");
+      setNoticeStatus(`"${created.title}" is ready to edit.`);
+    });
+
+  const renameVersion = async (title: string) => {
+    if (!active) return false;
+    let renamed = false;
+    await runVersionAction("rename the resume", async () => {
+      const response = await fetch(`/api/resumes/${active.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title }),
+      });
+      if (!response.ok) {
+        throw new Error(
+          await readErrorMessage(response, "Unable to rename the resume."),
+        );
+      }
+      setVersions((current) =>
+        current.map((version) =>
+          version.id === active.id ? { ...version, title } : version,
+        ),
+      );
+      setActive((current) => (current ? { ...current, title } : current));
+      renamed = true;
+    });
+    return renamed;
+  };
+
+  const deleteVersion = () => {
+    if (!active) return;
+    const deleting = active;
+    void runVersionAction("delete the resume", async () => {
+      const response = await fetch(`/api/resumes/${deleting.id}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        throw new Error(
+          await readErrorMessage(response, "Unable to delete the resume."),
+        );
+      }
+      const remaining = versions.filter((version) => version.id !== deleting.id);
+      setVersions(remaining);
+      delete savedRevisions.current[deleting.id];
+      setSaveLabel("Loading resume...");
+      await loadVersion(remaining[0].id);
+      setSaveLabel("Restored from server");
+      setNoticeStatus(`"${deleting.title}" was deleted.`);
+    });
+  };
+
+  const resume = active?.resume ?? createBlankResume();
 
   const skills = resume.skills
     .split(",")
@@ -156,7 +333,7 @@ export default function Home() {
        * 
        */}
       <aside className="sidebar">
-        <div className="nav-label">User's information</div>
+        <div className="nav-label">User&apos;s information</div>
         <nav className="section-nav">
           <AuthControl />
         </nav>
@@ -196,28 +373,46 @@ export default function Home() {
           onJsonImport={(event) =>
             void handleJsonImport(event, {
               onImport: (imported) => {
-                setResume(imported);
+                applyResume(() => imported);
                 setSaveLabel("Imported JSON — saving...");
               },
-              onError: setImportError,
-              onStatus: setImportStatus,
+              onError: setNoticeError,
+              onStatus: setNoticeStatus,
               onImporting: setIsImportingJson,
             })
           }
+          resumeSwitcher={
+            <ResumeSwitcher
+              versions={versions}
+              activeId={active?.id ?? null}
+              isBusy={isVersionBusy}
+              onSelect={(id) => void openVersion(id)}
+              onCreate={() =>
+                void createVersion(`Resume ${versions.length + 1}`, createBlankResume())
+              }
+              onDuplicate={() => {
+                if (active) {
+                  void createVersion(createCopyTitle(active.title), active.resume);
+                }
+              }}
+              onRename={renameVersion}
+              onDelete={deleteVersion}
+            />
+          }
         />
 
-        {(importError || importStatus) && (
+        {(noticeError || noticeStatus) && (
           <div
-            className={`import-message ${importError ? "has-error" : ""}`}
-            role={importError ? "alert" : "status"}
+            className={`import-message ${noticeError ? "has-error" : ""}`}
+            role={noticeError ? "alert" : "status"}
           >
-            <span>{importError || importStatus}</span>
+            <span>{noticeError || noticeStatus}</span>
             <button
               type="button"
-              aria-label="Dismiss import message"
+              aria-label="Dismiss message"
               onClick={() => {
-                setImportError("");
-                setImportStatus("");
+                setNoticeError("");
+                setNoticeStatus("");
               }}
             >×</button>
           </div>

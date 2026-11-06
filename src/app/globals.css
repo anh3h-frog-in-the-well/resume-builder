@@ -8,14 +8,16 @@
   --canvas: #f5f6f8;
   --blue: #5066df;
   --blue-dark: #3d52c7;
+  /* System fonts only: nothing is downloaded at build or run time. */
   --font-sans: Arial, Helvetica, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
 }
 
 @theme inline {
   --color-background: var(--canvas);
   --color-foreground: var(--ink);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: Arial, Helvetica, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
 }
 
 * {
@@ -478,6 +480,204 @@ button {
 .export-menu button small {
   color: #8a93a1;
   font-size: 9px;
+}
+
+.resume-switcher {
+  position: relative;
+}
+
+.resume-switcher-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 320px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+.resume-switcher-button:hover,
+.resume-switcher-button[aria-expanded="true"] {
+  border-color: #e1e5ed;
+  background: #f9faff;
+}
+
+.resume-switcher-button:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.resume-switcher-button strong {
+  overflow: hidden;
+  color: #313b4b;
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resume-switcher-button .button-chevron {
+  margin-left: 0;
+  color: #818a99;
+}
+
+.resume-menu {
+  position: absolute;
+  top: 40px;
+  left: 0;
+  z-index: 6;
+  width: 272px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: white;
+  box-shadow: 0 12px 30px #252d3c1c;
+}
+
+.resume-menu-list {
+  max-height: 260px;
+  margin: 0;
+  padding: 0 0 5px;
+  overflow-y: auto;
+  list-style: none;
+  border-bottom: 1px solid var(--line);
+}
+
+.resume-menu-list button,
+.resume-menu-actions button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 9px;
+  border: 0;
+  border-radius: 6px;
+  background: white;
+  color: #657184;
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.resume-menu-list button:hover,
+.resume-menu-actions button:hover:not(:disabled) {
+  background: #f5f6fa;
+  color: var(--blue);
+}
+
+.resume-menu-list button.is-active {
+  color: #303b4b;
+  font-weight: 600;
+}
+
+.resume-menu-check {
+  display: inline-flex;
+  width: 14px;
+  flex: 0 0 auto;
+  justify-content: center;
+  color: var(--blue);
+}
+
+.resume-menu-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resume-menu-actions {
+  padding-top: 5px;
+}
+
+.resume-menu-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.resume-menu-actions button.is-danger:hover:not(:disabled) {
+  background: #fff6f5;
+  color: #b44b45;
+}
+
+.resume-menu-form {
+  display: grid;
+  gap: 9px;
+  padding: 8px;
+  color: #4b5567;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.resume-menu-form p {
+  margin: 0;
+}
+
+.resume-menu-form label {
+  display: grid;
+  gap: 5px;
+}
+
+.resume-menu-form label span {
+  color: #818a99;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.resume-menu-form input {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid #dfe3ea;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.resume-menu-form input:focus {
+  outline: none;
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px #5066df22;
+}
+
+.resume-menu-error {
+  color: #a54842;
+}
+
+.resume-menu-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.resume-menu-form-actions button {
+  min-height: 32px;
+  padding: 0 11px;
+  border: 1px solid #e1e5ed;
+  border-radius: 6px;
+  background: white;
+  color: #596578;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.resume-menu-form-actions button.is-primary {
+  border-color: var(--blue);
+  background: var(--blue);
+  color: white;
+}
+
+.resume-menu-form-actions button.is-danger {
+  border-color: #d9534f;
+  background: #d9534f;
+  color: white;
+}
+
+.resume-menu-form-actions button:disabled {
+  cursor: wait;
+  opacity: 0.6;
 }
 
 .workspace {
@@ -958,7 +1158,6 @@ button {
   font-size: 10px;
 }
 
-.hidden-export,
 .mobile-section-nav {
   display: none;
 }
@@ -1497,6 +1696,19 @@ button {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .resume-switcher-button {
+    max-width: 190px;
+    padding: 4px 6px;
+  }
+
+  .resume-switcher-button .draft-badge {
+    display: none;
+  }
+
+  .resume-menu {
+    width: min(272px, calc(100vw - 34px));
   }
 
   .topbar-actions {

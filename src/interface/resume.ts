@@ -44,6 +44,18 @@ export type ResumeBase = Record<string, unknown> & {
 
 export type ResumeSection= "personal" | "skills" | "experience" | "education";
 
+/** A saved resume version as listed in the switcher. */
+export type ResumeVersionSummary = {
+  id: string;
+  title: string;
+  updatedAt: string;
+};
+
+/** A saved resume version together with its content. */
+export type ResumeVersion = ResumeVersionSummary & {
+  resume: Resume;
+};
+
 export type TemplateDetails = Record<
   ResumeTemplate,
   { name: string; description: string }

@@ -1,0 +1,45 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id           String   @id @db.Uuid
+  email        String   @unique(map: "email") @db.VarChar(320)
+  name         String   @db.VarChar(255)
+  passwordHash String?  @map("password_hash") @db.VarChar(255)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamp(0)
+
+  @@map("account")
+}
+
+model ResumeVersion {
+  id          String                    @id @db.Uuid
+  accountId   String                    @map("account_id") @db.Uuid
+  title       String                    @db.VarChar(80)
+  resumeData  Json                      @map("resume_data")
+  createdAt   DateTime                  @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt   DateTime                  @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+  experiences ResumeVersionExperience[]
+
+  @@index([accountId, createdAt], map: "idx_resume_versions_account")
+  @@map("resume_versions")
+}
+
+model ResumeVersionExperience {
+  resumeId    String        @map("resume_id") @db.Uuid
+  position    Int
+  company     String        @default("") @db.VarChar(255)
+  role        String        @default("") @db.VarChar(255)
+  fromMonth   String        @default("") @map("from_month") @db.Char(7)
+  toMonth     String        @default("") @map("to_month") @db.Char(7)
+  description String        @db.Text
+  resume      ResumeVersion @relation(fields: [resumeId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_resume_version_experiences_version")
+
+  @@id([resumeId, position])
+  @@map("resume_version_experiences")
+}

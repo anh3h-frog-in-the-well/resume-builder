@@ -5,6 +5,19 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 
+/**
+ * Resolves where to send the user after signing in. Only same-origin paths from
+ * `callbackUrl` are honoured; everything else falls back to the editor.
+ */
+function getRedirectPath() {
+  const requestedPath = new URLSearchParams(window.location.search).get(
+    "callbackUrl",
+  );
+  return requestedPath?.startsWith("/") && !requestedPath.startsWith("//")
+    ? requestedPath
+    : "/";
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const { status } = useSession();
@@ -16,7 +29,7 @@ export default function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    if (status === "authenticated") router.replace("/");
+    if (status === "authenticated") router.replace(getRedirectPath());
   }, [router, status]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -54,21 +67,16 @@ export default function LoginPage() {
         password,
         redirect: false,
       });
-      if (!result.ok) {
+      // Auth.js answers a rejected credentials sign-in with a 200 response
+      // whose `error` is set, so `ok` alone is not enough.
+      if (!result.ok || result.error) {
         throw new Error(
           isRegistering
             ? "Account created, but sign-in failed. Please sign in."
             : "Email or password is incorrect.",
         );
       }
-      const requestedPath = new URLSearchParams(window.location.search).get(
-        "callbackUrl",
-      );
-      const redirectPath =
-        requestedPath?.startsWith("/") && !requestedPath.startsWith("//")
-          ? requestedPath
-          : "/";
-      router.replace(redirectPath);
+      router.replace(getRedirectPath());
       router.refresh();
     } catch (submitError) {
       setError(

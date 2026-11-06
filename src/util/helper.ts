@@ -49,7 +49,6 @@ export const iconPaths: IconPathMap = {
     path("M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"),
     circle(12, 12, 3),
   ),
-  language: path("m10.5 21 5.25-11.25L21 21m-9-3h7.5M3 5.621a48.474 48.474 0 0 1 6-.371m0 0c1.12 0 2.233.038 3.334.114M9 5.25V3m3.334 2.364C11.176 10.658 7.69 15.08 3 17.502m9.334-12.138c.896.061 1.785.147 2.666.257m-4.589 8.495a18.023 18.023 0 0 1-3.827-5.802"),
 };
 
 function formatMonth(value: string) {
@@ -59,13 +58,13 @@ function formatMonth(value: string) {
     month: "short",
     year: "numeric",
     timeZone: "UTC",
-  }).format(new Date(Date.UTC(Number(year), Number(month) - 1, 1)));
+  }).format(new Date(Date.UTC(Number(year), Number(month)-1, 1)));
 }
 
 export function formatExperienceDates(item: Experience) {
   if (!item.from && !item.to) return "";
   const from = item.from ? formatMonth(item.from) : "";
-  const to = item.to ? formatMonth(item.to) : item.from ? "Present" : "";
+  const to = item.to.trim() ? formatMonth(item.to.trim()) : item.from ? "Present" : "";
   return [from, to].filter(Boolean).join(" — ");
 }
 

@@ -86,7 +86,7 @@ export async function POST(request: Request) {
       typeof error === "object" &&
       error !== null &&
       "code" in error &&
-      error.code === "ER_DUP_ENTRY"
+      error.code === "P2002"
     ) {
       return NextResponse.json(
         { error: "An account with this email already exists." },

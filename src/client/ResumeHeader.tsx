@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ChangeEvent } from "react";
+import { useState, type ChangeEvent, type ReactNode } from "react";
 import type { Resume } from "../interface/resume";
 import { downloadJson, downloadWord } from "../util/helper";
 import Icon from "./Icon";
@@ -10,6 +10,8 @@ type ResumeHeaderProps = {
   saveLabel: string;
   isImportingJson: boolean;
   onJsonImport: (event: ChangeEvent<HTMLInputElement>) => void;
+  /** Control for choosing between the account's resume versions. */
+  resumeSwitcher?: ReactNode;
 };
 
 export default function ResumeHeader({
@@ -17,13 +19,20 @@ export default function ResumeHeader({
   saveLabel,
   isImportingJson,
   onJsonImport,
+  resumeSwitcher,
 }: ResumeHeaderProps) {
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
 
   return (
     <header className="topbar">
       <div className="breadcrumb">
-        <span>My resume</span>
+        <span>My resumes</span>
+        {resumeSwitcher && (
+          <>
+            <span className="breadcrumb-divider">/</span>
+            {resumeSwitcher}
+          </>
+        )}
       </div>
       <div className="topbar-actions">
         <span className="save-status">

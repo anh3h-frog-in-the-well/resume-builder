@@ -7,3 +7,10 @@ declare module "next-auth" {
     } & DefaultSession["user"];
   }
 }
+
+declare module "next-auth/jwt" {
+  interface JWT {
+    /** The `account.id` row the signed-in user maps to; resolved at sign-in. */
+    accountId?: string;
+  }
+}

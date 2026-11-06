@@ -50,10 +50,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   callbacks: {
 
     // Handle sign in with google
-    async signIn({user, account, profile }) {
+    async signIn({ profile }) {
       // Insert or update user to database if user log in with google
       if (profile) {
-        console.log('profile', profile.email, profile.name)
         const authUser = await findAuthUserByEmail(profile.email!);
         if (!authUser) {
           await createPasswordUser(profile.email!, profile.name!, await hashPassword(''));
@@ -63,21 +62,31 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       // allow sign in
       return true; 
     },
-    async jwt({ token, user }) {
+    async jwt({ token, user, account }) {
       if (user?.id) token.sub = user.id;
+
+      // Resolve the database account once, when the token is issued, instead
+      // of on every request. The credentials provider already returns the
+      // account id; Google returns its own subject, so look the account up
+      // by email (the signIn callback has created it by now). Tokens issued
+      // before this field existed are upgraded the first time they are seen.
+      if (account?.provider === "credentials" && user?.id) {
+        token.accountId = user.id;
+      } else if (!token.accountId && typeof token.email === "string") {
+        try {
+          const authUser = await findAuthUserByEmail(token.email);
+          if (authUser) token.accountId = authUser.id;
+        } catch (error) {
+          console.error("Unable to resolve the account for this session.", error);
+        }
+      }
       return token;
     },
     async session({ session, token }) {
-      console.log('session-session', session)
-      console.log('session-token', token)
       if (session.user && token.sub) {
-        // Make sure that userId is from database
-        const authUser = await findAuthUserByEmail(token.email!);
-        if (authUser) {
-          session.user.id = authUser.id;
-        } else {
-          session.user.id = token.sub;
-        }
+        // Fall back to the token subject so a session stays valid even if the
+        // account could not be resolved when the token was issued.
+        session.user.id = token.accountId ?? token.sub;
       }
       return session;
     },
